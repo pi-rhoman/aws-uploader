@@ -7,6 +7,17 @@ BACKUP_FILENAME=`basename $BACKUP_FILE`
 BUCKET_NAME=liams-computer-backup
 FRAGMENT_COUNT=200
 
+test_availability () {
+	if ! ping -c 1 amazonaws.com &> /dev/null; then
+		echo "No connection"
+		exit 1
+	fi
+	
+	if [ ! -e $BACKUP_FILENAME ] || [ ! -r $BACKUP_FILENAME ] ; then
+		echo "File does not exist or permissions have changed"
+		exit 2 
+	fi
+}
 
 get_upload () {
 	echo `aws s3api list-multipart-uploads --bucket $BUCKET_NAME | jq ".Uploads.[] | select(.Key == \"$BACKUP_FILENAME\")"`
@@ -30,6 +41,7 @@ FILE_PARTS="{
 # Upload each part individually
 PART_NUMBER=1
 while [ $PART_NUMBER -lt $FRAGMENT_COUNT ]; do
+	test_availability 	
 
 	# extract the right chunk
 	split -n $PART_NUMBER/$FRAGMENT_COUNT --numeric-suffixes=1 $BACKUP_FILE > $BACKUP_FILE.$PART_NUMBER
