@@ -7,11 +7,11 @@ BACKUP_FILENAME=`basename $BACKUP_FILE`
 BUCKET_NAME=liams-computer-backup
 FRAGMENT_COUNT=200
 
-test_availability () {
-	if ! ping -c 1 amazonaws.com &> /dev/null; then
-		echo "No connection"
-		exit 1
-	fi
+wait_availability () {
+	while [ ! "$(dig +short amazonaws.com)" ]; do
+		echo "waiting for connection"
+		sleep 10s
+	done
 	
 	if [ ! -e $BACKUP_FILENAME ] || [ ! -r $BACKUP_FILENAME ] ; then
 		echo "File does not exist or permissions have changed"
@@ -41,7 +41,7 @@ FILE_PARTS="{
 # Upload each part individually
 PART_NUMBER=1
 while [ $PART_NUMBER -lt $FRAGMENT_COUNT ]; do
-	test_availability 	
+	wait_availability 	
 
 	# extract the right chunk
 	split -n $PART_NUMBER/$FRAGMENT_COUNT --numeric-suffixes=1 $BACKUP_FILE > $BACKUP_FILE.$PART_NUMBER
