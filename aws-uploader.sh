@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Where do we store the fragments
-# by default store in current directory
+if [ $# -ne 1 ]; then
+	echo "Usage: ./aws-uploader.sh <filename>"
+	exit 1
+fi
+
 BACKUP_FILE=`realpath $1`
 BACKUP_FILENAME=`basename $BACKUP_FILE`
 BUCKET_NAME=liams-computer-backup
@@ -11,11 +14,13 @@ wait_availability () {
 	while [ ! "$(dig +short amazonaws.com)" ]; do
 		echo "waiting for connection"
 		sleep 10s
+		wait_availability
 	done
-	
-	if [ ! -e $BACKUP_FILENAME ] || [ ! -r $BACKUP_FILENAME ] ; then
-		echo "File does not exist or permissions have changed"
-		exit 2 
+	read < $BACKUP_FILE 2> /dev/null
+	if [ $? -ne 0 ]; then
+		echo "file not available"
+		sleep 10s
+		wait_availability
 	fi
 }
 
@@ -44,7 +49,7 @@ while [ $PART_NUMBER -lt $FRAGMENT_COUNT ]; do
 	wait_availability 	
 
 	# extract the right chunk
-	split -n $PART_NUMBER/$FRAGMENT_COUNT --numeric-suffixes=1 $BACKUP_FILE > $BACKUP_FILE.$PART_NUMBER
+	split -n $PART_NUMBER/$FRAGMENT_COUNT --numeric-suffixes=1 --verbose $BACKUP_FILE > $BACKUP_FILE.$PART_NUMBER
 	part=$BACKUP_FILE.$PART_NUMBER
 	# check for prior uploads
 	PRIOR_UPLOAD=`echo $UPLOADED_PARTS | jq --argjson part_number $PART_NUMBER '.Parts.[] | select(.PartNumber == $part_number)'`
