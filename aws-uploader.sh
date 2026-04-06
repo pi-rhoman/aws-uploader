@@ -8,7 +8,7 @@ fi
 BACKUP_FILE=`realpath $1`
 BACKUP_FILENAME=`basename $BACKUP_FILE`
 BUCKET_NAME=liams-computer-backup
-FRAGMENT_COUNT=200
+FRAGMENT_COUNT=2000
 
 wait_availability () {
 	while [ ! "$(dig +short amazonaws.com)" ]; do
@@ -25,9 +25,11 @@ wait_availability () {
 }
 
 get_upload () {
-	echo `aws s3api list-multipart-uploads --bucket $BUCKET_NAME | jq ".Uploads.[] | select(.Key == \"$BACKUP_FILENAME\")"`
+	echo `aws s3api list-multipart-uploads --bucket $BUCKET_NAME | jq ".Uploads.[]? | select(.Key == \"$BACKUP_FILENAME\")"`
 }
 
+# Check if we are disconnected from the beginning
+wait_availability
 
 # Resume from multipart upload or start a new one
 if [[ ! $(get_upload) ]]; then
@@ -45,14 +47,14 @@ FILE_PARTS="{
 }" 
 # Upload each part individually
 PART_NUMBER=1
-while [ $PART_NUMBER -lt $FRAGMENT_COUNT ]; do
+while [ $PART_NUMBER -le $FRAGMENT_COUNT ]; do
 	wait_availability 	
 
 	# extract the right chunk
 	split -n $PART_NUMBER/$FRAGMENT_COUNT --numeric-suffixes=1 --verbose $BACKUP_FILE > $BACKUP_FILE.$PART_NUMBER
 	part=$BACKUP_FILE.$PART_NUMBER
 	# check for prior uploads
-	PRIOR_UPLOAD=`echo $UPLOADED_PARTS | jq --argjson part_number $PART_NUMBER '.Parts.[] | select(.PartNumber == $part_number)'`
+	PRIOR_UPLOAD=`echo $UPLOADED_PARTS | jq --argjson part_number $PART_NUMBER '.Parts.[]? | select(.PartNumber == $part_number)'`
 	if [ ! -z "$PRIOR_UPLOAD" ] ; then
 		echo "Checking $PART_NUMBER"
 		PART_CRC32=`crc32 $part | xxd -r -p | base64`
